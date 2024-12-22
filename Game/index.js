@@ -200,6 +200,7 @@ scene("Pause", (score, playerState, blocksState) => {
         scale(2), 
         anchor("center"), 
         area()]);
+    
     const Back = add([
         text("Выйти."), 
         pos(700, 400), 

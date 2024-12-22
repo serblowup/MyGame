@@ -1,0 +1,244 @@
+kaboom(); // Подключаем функцию, с помощью которой мы можем использовать все функции из библиотеки Kaboom.js.
+
+const WIDTH = width(); // Задаём переменую ширина.
+const HEIGHT = height(); // Задаём переменную высота
+const FLOOR_HEIGHT = HEIGHT / 4; // Задаём переменную высота поля.
+const JUMP_FORCE = 900; // Задаём переменную сила прыжка.
+const SPEED = 500; // Задаём переменную скорость.
+const BACKGROUND_COLOR = Color.fromHex("#6495ED"); // Задаём цвет фона в сцене игры.
+const GRASS_COLOR = Color.fromHex("#b3bfae"); // Задаём цвет поверхности, по которой движется игрок в сцене игры.
+const FLOOR_COLOR = Color.fromHex("#c9d2c6"); // Задаём цвет пола.
+
+setBackground(BACKGROUND_COLOR); // Вызов функции смены фона.
+
+loadSprite("block", "block.png"); // Загружаем спрайт препятствия.
+
+const playerSprites = ["P1", "P2", "P3", "P4", "P5","P6", "P7", "P8", "P9", "P10", "P11"]; // Создаём массив с анимацией бега игрока.
+playerSprites.forEach(spriteName => loadSprite(spriteName, `pl${spriteName.slice(1)}.png`)); // Загружаем каждый спрайт игрока из массива playerSprites.
+
+const deathSprites = ["D1", "D2", "D3", "D4", "D5"]; // Создаём массив с анимацией  смерти игрока.
+deathSprites.forEach(spriteName => loadSprite(spriteName, `d${spriteName.slice(1)}.png`)); // Загружаем каждый спрайт смерти игрока из массива deathSprites.
+
+scene("MainMenu", function () { Создание сцены главного меню ( самая первая сцена ).
+    loadSprite("BackgroundMainMenu", "BackgroundMenu.jpg"); // Загружаем спрайт для фона  в главном меню.
+
+    const scaleX = WIDTH / 873; Ширина ( размер спрайта 873 на 528).
+    const scaleY = HEIGHT / 528; Высота ( размер спрайта 873 на 528).
+
+    const scaleFactor = Math.max(scaleX, scaleY);  // Выбираем максимальный масштаб для поддержания пропорций.
+
+    add([
+        sprite("BackgroundMainMenu"),  // Добавляем спрайт для фона в главном меню.
+        scale(scaleFactor), // Размер спрайта.
+        pos(WIDTH / 2, HEIGHT / 2),  // Спрайт расположен в центре.
+        anchor("center")  // Точка для рендеринга.
+    ]);
+
+    const Menu = add([
+        text("Главное меню."), // Добавление текста.
+        pos(700, 50), // Позиция текста на экране.
+        scale(2), // Размер текста.
+        anchor("center")]); // Точка для рендеринга.
+
+    const Start = add([
+        text("Начать игру."), // Добавление текста.
+        pos(700, 300), // Позиция текста на экране.
+        scale(2), // Размер текста.
+        anchor("center"), // Точка для рендеринга.
+        area()]); // Возможность клика по тексту.
+    Start.onClick(function () { // Функция клика по тексту.
+        go("game", 0); // Переход на сцену игры.
+    });
+});
+
+scene("game", function (InitialScore, playerState, blocksState) { // Создание сцены игры.
+    setGravity(2000); // Задаём гравитацию.
+
+    const createPlayer = function (state) { // Создаём игрока.
+        const player = add([ Метод add:
+            sprite(playerSprites[0]), // Добавление спрайтов игрока.
+            scale(1), // Размер спрайтов.
+            pos(80, HEIGHT - FLOOR_HEIGHT - 40), // Позиция спрайтов.
+            area(), // Возможность столкновения.
+            body(), // Привязка к заданной гравитации.
+            { currentFrame: 0, isPaused: false }]); // Свойства игрока.
+        if (state) { Если есть состояние игрока, которое было сохранено, то возвращаем это состояние ( необходимо для перехода между сценой игры и паузы ).
+            player.pos = state.pos;
+            player.vel = state.vel;
+        }
+        return player; // Возвращаем  объект игрока.
+    }
+
+    const player = createPlayer(playerState); // Создание игрока с состоянием, которое было сохранено ( после нажатия "Продолжить" в сцене паузы игрок восстановится на экране в той же позиции, где он нажал на паузу).
+    
+    const createFloor = function () { // Создаём поле, по которому будет двигаться игрок.
+        add([ // Метод add:
+        rect(WIDTH, FLOOR_HEIGHT), // Прямоугольник во всю ширину и высотой поля.
+        outline(4, GRASS_COLOR), // Обводка в 4 пикселя цветом поверхности. 
+        color(FLOOR_COLOR), // Цвет поля.
+        pos(0, HEIGHT), // Позиция 
+        anchor("botleft"), // Рендеринг слева.
+        area(), // Возможность столкновения. 
+        body({ isStatic: true })]); // Статичен к гравитации ( не действует ).
+    }
+
+    createFloor(); // Создаём поле.
+
+    let score = InitialScore || 0; // Создаём счёт, если он не передан, то устанавливаем 0 ( необходимо для перехода между паузой и продолжением игры ).
+    let blocks = []; // Создаём массив блоков.
+    let shouldSpawnBlocks = true; // Флаг для создания блоков.
+
+    const spawnBlock = function () { // Создаём препятсвия.
+        if (!shouldSpawnBlocks) return; // Если не нужно создавать блоки, то осуществляется выход из функции.
+        const block = add([ // Метод add:
+            sprite("block"), // Спрайт для блока.
+            scale(0.6), // Размер спрайта.
+            area(), // Возможность столкновения.
+            pos(WIDTH, HEIGHT - FLOOR_HEIGHT), // Позиция на экране.
+            anchor("botleft"), // Рендеринг слева.
+            move(LEFT, SPEED), // Двигаются влево со скоростью, которую мы задали.
+            offscreen({ destroy: true }), // Уничтожение после выхода за экран.
+            "block"]); // Строка. 
+        blocks.push(block); // Добавление блока в массив.
+        wait(rand(1, 3), spawnBlock); // Ожидаем 1-3 секунды и создаём новый блок.
+    }
+
+    if (blocksState) { // Если есть состояние блока, которе было сохранено, то возвращаем это состояние ( необходимо для перехода между сценой игры и паузы ).
+        blocksState.forEach(blockState => {
+            const block = add([ // Метод add:
+                sprite("block"), // Спрайт для блока.
+                scale(0.6), // Размер спрайта.
+                area(), // Возможность столкновения.
+                pos(blockState.pos), // Позиция на экране ( та позиция, в момент которой была нажата кнопка паузы).
+                anchor("botleft"), // Рендеринг слева.
+                move(LEFT, SPEED), // Двигаются влево со скоростью, которую мы задали.
+                offscreen({ destroy: true }), // Уничтожение после выхода за экран.
+                "block"]); // Строка. 
+            blocks.push(block); // Добавление блока в массив.
+        });
+        wait(rand(1, 3), spawnBlock); // Ожидаем 1-3 секунды и создаём новый блок.
+    } else {
+        spawnBlock(); // Создаём первый блок.
+    }
+
+    player.onCollide("block", function (block) {  // Логика столкновения игрока с препятсвием.
+        if (!player.isPaused) { // Если не пауза, то выполняется следующее:
+            player.isPaused = true; // Флаг паузы игрока ( анимация бега прекращается ).
+            shouldSpawnBlocks = false; // Останавливаем создание блоков.
+            player.playDeathAnimation(); // Анимация смерти игрока.
+            blocks.forEach(block => block.unuse("move")); // Остановка дживения блоков.
+        }
+    });
+
+    player.playDeathAnimation = function () { // Анимация смерти игрока.
+        let deathFrame = 0; // Первый кадр анимации.
+        const deathInterval = setInterval(() => { // Создание временного интервала для анимации смерти.
+            player.use(sprite(deathSprites[deathFrame])); // Используем первый спрайт.
+            deathFrame++; // Переходим на следующий.
+            if (deathFrame >= deathSprites.length) { // Если  достигли последнего кадра.
+                clearInterval(deathInterval); // Остановка интервала.
+                go("lose", score); // Переход на сцену проигрыша.
+            }
+        }, 100); // Первый спрайт меняется на второй через 100 миллисекунд и т.д.
+    }
+
+    const jump = function () { // Объявляем функцию прыжков.
+        if (player.isGrounded() && !player.isPaused) { // Игрок находится на земле и не на паузе.
+            player.jump(JUMP_FORCE); // Игрок может подпрыгнуть с силой прыжка, которую мы задали.
+        }
+    }
+
+    onClick(jump); // Прыжок на клик мыши.
+
+    const createScoreLabel = function () {  // Функция счёта очков.
+        const scoreLabel = add([ // Метод add:
+            text(score), // Текст со счётом.
+            scale(1), // Размер текста.
+            pos(25, 25)]); // Позиция на экране во время сцены игры.
+        return scoreLabel; // Возвращаем  текст со счётом.
+    }
+
+    const scoreLabel = createScoreLabel(); // Создаём счёт.
+
+    loop(0.2, function () {  // Цикл с интервалом в 0.2 секунды.
+        if (!player.isPaused) { //  Если игрок находится не на паузе.
+            player.currentFrame = (player.currentFrame + 1) % playerSprites.length; // Обновляем кадр анимации бега игрока.
+            player.use(sprite(playerSprites[player.currentFrame])); // Используем текущий кадр анимации бега.
+        }
+    });
+
+    onUpdate(function () { // Метод , который вызывается 60 раз в секунду.
+        if (!player.isPaused) { // Если игрок находится не на паузе.
+            score++; // Прибавляем очки к счёту.
+            scoreLabel.text = score; // Обновляем количество очков.
+        }
+    });
+
+    onKeyPress("enter", function () { // Вызов функции нажатием кнопки "enter".
+        const playerState = { Состояние игрока, которое было сохранено ( необходимо для перехода между сценой игры и паузы ).
+            pos: player.pos,
+            vel: player.vel,
+        }
+        const blocksState = blocks.map(block => ({ // Сохранение состояния всех блоков, которые были на экране.
+            pos: block.pos,
+        }));
+        go("Pause", score, playerState, blocksState); // Переход на сцену паузы.
+    });
+});
+
+scene("Pause", (score, playerState, blocksState) => { // Сцена паузы.
+    const PauseText = add([ // Метод add:
+        text("Пауза."), // Текст.
+        pos(700, 50), // Позиция на экране.
+        scale(2), // Размер текста.
+        anchor("center")]); // Рендеринг по центру.
+
+    const Resume = add([ // Метод add:
+        text("Продолжить."), // Текст.
+        pos(700, 200), // Позиция на экране.
+        scale(2), // Размер текста.
+        anchor("center"), // Рендеринг по центру.
+        area()]); // Возможность клика по тексту.
+
+    const Back = add([ // Метод add:
+        text("Выйти."), // Текст.
+        pos(700, 400), // Позиция на экране.
+        scale(2), // Размер текста.
+        anchor("center"), // Рендеринг по центру.
+        area()]); // Возможность клика по тексту.
+
+    Resume.onClick(function () { // Функция клика по тексту "Продолжить".
+        go("game", score, playerState, blocksState); // Возвращаем сцену игры с состоянием счёта, позицией игрока на экране, позицией блоков. 
+    });
+
+    Back.onClick(function () { // Функция клика по тексту "Выйти".
+        go("MainMenu"); // Переход на сцену главного меню.
+    });
+});
+
+scene("lose", function(score) { // Сцена проигрыша.
+    add([ // Метод add:
+        text("Игра закончена."), // Текст.
+        pos(center()), // Позиция на экране. 
+        scale(2), // Размер текста.
+        anchor("center")]); // Рендеринг по центру.
+    
+    add([ // Метод add:
+        text("Счёт: " + score), // Добавляем текст со счётом, который набрал игрок.
+        pos(WIDTH / 2, HEIGHT / 2 + 64), // Добавляем текст( по ширине - расположен в середине, по высоте - расположен в середине + 64 пикселя ).
+        scale(2), // Размер текста.
+        anchor("center")]); // Рендеринг по центру.
+    
+    onClick(function () { // Функция клика по экрану.
+        go("MainMenu"); // Переход на сцену главного меню.
+    });
+});
+
+go("MainMenu"); // Начинаем игру со сцены главного меню.
+
+
+
+
+
+
+
